@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -70,3 +73,11 @@ jobs:
         with:
           name: photobooth-playstore-aab
           path: android/app/build/outputs/bundle/release/app-release.aab
+
+      - name: Publier l'APK en téléchargement direct
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk photobooth.apk
+          gh release delete derniere-version --yes --cleanup-tag || true
+          gh release create derniere-version photobooth.apk --title "Photobooth (dernière version)" --notes "Télécharge photobooth.apk et ouvre-le sur ton téléphone Android pour l'installer." --latest
