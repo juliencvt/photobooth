@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#141114">
+<title>Photobooth</title>
+<script src="capacitor.js"></script>
+<style>
+@font-face{font-family:Outfit;font-weight:400;src:url(fonts/outfit-latin-400-normal.woff2) format('woff2')}
+@font-face{font-family:Outfit;font-weight:600;src:url(fonts/outfit-latin-600-normal.woff2) format('woff2')}
+@font-face{font-family:Outfit;font-weight:800;src:url(fonts/outfit-latin-800-normal.woff2) format('woff2')}
+@font-face{font-family:'Cormorant Garamond';font-style:italic;font-weight:600;src:url(fonts/cormorant-garamond-latin-600-italic.woff2) format('woff2')}
+@font-face{font-family:Fredoka;font-weight:600;src:url(fonts/fredoka-latin-600-normal.woff2) format('woff2')}
+@font-face{font-family:'Archivo Black';font-weight:400;src:url(fonts/archivo-black-latin-400-normal.woff2) format('woff2')}
+</style>
+<style>
+/* VOICE: festive, confident, zero friction — a guest should get it in one look
+   IDEA: the old coin-op photo cabin: curtain, red "go" light, a printed strip
+   PICTURE: the live mirror itself, huge, with a 3-2-1 countdown and a white flash
+   COLOUR and TYPE: cabin black, curtain red #e63946 as the shutter, warm white; Outfit
+   LAYOUT: top bar, mirror, controls under thumb; gallery of strips below */
+:root{color-scheme:dark;--bg:#141114;--panel:#1f1a1f;--line:#3a3139;--ink:#f7f1ea;--mute:#b5aab0;--red:#e63946;--gold:#f1c27d}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Outfit,system-ui,sans-serif;overflow-x:clip;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+input{-webkit-user-select:text;user-select:text}
+.check{display:flex;align-items:center;gap:12px;font-weight:600}
+.check input{width:24px;height:24px;accent-color:var(--red)}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.top{display:flex;align-items:center;gap:10px;padding:12px max(4vw,14px);border-bottom:1px solid var(--line)}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px;margin-right:auto}
+.logo i{width:12px;height:12px;border-radius:50%;background:var(--red);box-shadow:0 0 12px var(--red)}
+.ev{color:var(--mute);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ghost{min-height:44px;padding:0 14px;border-radius:12px;border:1px solid var(--line);background:var(--panel);font-weight:600}
+.stage{max-width:1100px;margin:0 auto;padding:16px max(4vw,14px) 8px}
+.mirror{position:relative;aspect-ratio:4/3;max-height:68vh;margin:0 auto;border-radius:22px;overflow:hidden;background:#000;
+  box-shadow:0 0 0 10px #2a1418,0 0 0 11px #4a2228,0 30px 60px -20px #000}
+.mirror video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.mirror.back video{transform:none}
+.ph{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:14px;text-align:center;padding:20px;
+  background:repeating-linear-gradient(90deg,#5a1a22 0 22px,#6d2029 22px 40px,#4c151c 40px 52px)}
+.ph p{margin:0;max-width:30ch;background:#141114cc;padding:10px 16px;border-radius:12px}
+.ph strong{font-size:clamp(22px,4vw,32px);line-height:1.1}
+.count{position:absolute;inset:0;display:grid;place-items:center;font-weight:800;font-size:clamp(120px,30vw,260px);color:#fff;
+  text-shadow:0 6px 40px #000a;pointer-events:none}
+.count.pop{animation:pop .9s ease-out}
+@keyframes pop{from{transform:scale(1.5);opacity:0}25%{opacity:1}to{transform:scale(.85);opacity:.15}}
+.flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+.flash.on{animation:fl .5s ease-out}
+@keyframes fl{from{opacity:1}to{opacity:0}}
+.dots{position:absolute;top:14px;left:50%;translate:-50% 0;display:flex;gap:8px}
+.dots b{width:14px;height:14px;border-radius:50%;border:2px solid #fff;background:#0006}
+.dots b.done{background:var(--red);border-color:var(--red)}
+.controls{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;padding:20px 0 6px}
+.seg{display:inline-flex;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:4px;justify-self:start}
+.seg button{min-height:40px;padding:0 14px;border:0;border-radius:10px;background:none;font-weight:600;color:var(--mute)}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.shutter{width:92px;height:92px;border-radius:50%;border:6px solid var(--ink);background:var(--red);box-shadow:0 0 0 6px var(--bg),0 0 30px #e6394699;
+  font-weight:800;font-size:15px;color:#fff;transition:transform .15s}
+.shutter:active{transform:scale(.93)}
+.shutter:disabled{opacity:.5}
+.filters{display:flex;gap:6px;overflow-x:auto;justify-self:end;max-width:100%;padding-bottom:2px}
+.chip{flex:none;min-height:40px;padding:0 12px;border-radius:20px;border:1px solid var(--line);background:none;color:var(--mute);font-size:14px;font-weight:600}
+.chip[aria-pressed=true]{border-color:var(--gold);color:var(--gold)}
+.band{max-width:1100px;margin:0 auto;padding:22px max(4vw,14px) 48px}
+h2{font-size:22px;margin:0 0 4px}
+.sub{color:var(--mute);margin:0 0 16px;font-size:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:14px}
+.grid button{padding:0;border:0;background:none;border-radius:8px;overflow:hidden;box-shadow:0 10px 24px -10px #000}
+.grid img{display:block;width:100%}
+.empty{color:var(--mute);border:1px dashed var(--line);border-radius:16px;padding:24px;text-align:center}
+.sheet{position:fixed;inset:0;z-index:20;background:#0b090bf2;display:grid;place-items:center;padding:16px;overflow:auto}
+.sheet[hidden]{display:none}
+.res{display:grid;grid-template-columns:minmax(0,auto) 260px;gap:24px;align-items:center;max-width:1000px}
+.res img{max-height:84vh;max-width:100%;border-radius:6px;box-shadow:0 30px 60px -20px #000;justify-self:center}
+.acts{display:grid;gap:10px}
+.big{min-height:54px;border-radius:14px;border:0;font-weight:800;font-size:17px;background:var(--ink);color:var(--bg)}
+.big.red{background:var(--red);color:#fff}
+.note{font-size:13px;color:var(--mute);min-height:20px;margin:0}
+.panel{width:min(520px,100%);background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:22px;display:grid;gap:16px}
+.panel h2{display:flex;justify-content:space-between;align-items:center}
+label{display:grid;gap:6px;font-weight:600;font-size:14px}
+input[type=text],select{min-height:46px;font-size:16px;padding:0 12px;border-radius:12px;border:1px solid var(--line);background:var(--bg)}
+.themes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.themes button{min-height:64px;border-radius:12px;border:2px solid transparent;font-size:13px;font-weight:600;padding:4px}
+.themes button[aria-pressed=true]{border-color:var(--gold);box-shadow:0 0 0 2px var(--bg) inset}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:700px){
+  .controls{grid-template-columns:1fr;justify-items:center}
+  .seg,.filters{justify-self:center}.shutter{order:-1}
+  .res{grid-template-columns:1fr}.res img{max-height:62vh}
+  .mirror{box-shadow:0 0 0 6px #2a1418,0 20px 40px -20px #000}
+}
+@media(prefers-reduced-motion:reduce){.count.pop,.flash.on{animation:none}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="logo"><i></i>Photobooth</div>
+  <span class="ev" id="evLabel"></span>
+  <button class="ghost" id="openSet">Réglages</button>
+</header>
+
+<main class="stage">
+  <div class="mirror" id="mirror">
+    <video id="vid" playsinline muted autoplay></video>
+    <div class="ph" id="ph">
+      <strong id="phTitle">Souriez !</strong>
+      <p id="phText">Appuie sur le gros bouton rouge pour prendre la photo.</p>
+    </div>
+    <div class="count" id="count"></div>
+    <div class="flash" id="flash"></div>
+    <div class="dots" id="dots"></div>
+  </div>
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Format">
+      <button data-mode="single" aria-pressed="false">1 photo</button>
+      <button data-mode="strip" aria-pressed="true">Bande ×4</button>
+    </div>
+    <button class="shutter" id="shoot" aria-label="Prendre la photo">GO</button>
+    <div class="filters" id="filters" role="group" aria-label="Filtre"></div>
+  </div>
+</main>
+
+<section class="band">
+  <h2>Photos de l'évènement <span id="nb"></span></h2>
+  <p class="sub" id="galNote">Touchez une photo pour l'enregistrer ou la partager.</p>
+  <div class="grid" id="gal"></div>
+</section>
+
+<div class="sheet" id="result" hidden>
+  <div class="res">
+    <img id="resImg" alt="Photo finale">
+    <div class="acts">
+      <button class="big red" id="save">Enregistrer dans la galerie</button>
+      <button class="big" id="share" hidden>Partager</button>
+      <button class="ghost" id="again" style="min-height:54px">Nouvelle photo</button>
+      <p class="note" id="note"></p>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="settings" hidden>
+  <form class="panel" id="setForm">
+    <h2>Réglages <button type="button" class="ghost" id="closeSet">Fermer</button></h2>
+    <label>Titre imprimé sur la photo<input type="text" id="tTitle" maxlength="40"></label>
+    <label>Sous-titre (date, lieu…)<input type="text" id="tSub" maxlength="40"></label>
+    <div><label>Style du cadre</label><div class="themes" id="themes"></div></div>
+    <div class="row">
+      <label>Compte à rebours<select id="tDelay"><option value="3">3 s</option><option value="5">5 s</option><option value="10">10 s</option></select></label>
+      <label>Caméra<select id="tFacing"><option value="user">Avant (selfie)</option><option value="environment">Arrière</option></select></label>
+    </div>
+    <label class="check"><input type="checkbox" id="tAuto">Enregistrer chaque photo dans la galerie automatiquement</label>
+    <label class="check"><input type="checkbox" id="tReturn">Revenir à la caméra 15 s après chaque photo (mode borne)</label>
+    <button class="big red" type="submit">Valider</button>
+  </form>
+</div>
+
+<input type="file" id="file" accept="image/*" capture="user" hidden>
+
+<script>
+{
+const $ = id => document.getElementById(id);
+const THEMES = {
+  mariage:{name:'Mariage',bg:'#ffffff',ink:'#2b2622',acc:'#b08d57',font:'Cormorant Garamond',w:'italic 600'},
+  fete:{name:'Fête',bg:'#ff4f7b',ink:'#ffffff',acc:'#ffd23f',font:'Fredoka',w:'600'},
+  soiree:{name:'Soirée',bg:'#111111',ink:'#ffffff',acc:'#e8c26b',font:'Outfit',w:'800'},
+  pro:{name:'Pro',bg:'#f2f2f0',ink:'#111111',acc:'#e63946',font:'Archivo Black',w:'400'}
+};
+const FILTERS = {
+  normal:{n:'Normal',css:'none'},
+  noir:{n:'N&B',css:'grayscale(1) contrast(1.1)'},
+  sepia:{n:'Sépia',css:'sepia(.9)'},
+  vintage:{n:'Vintage',css:'sepia(.4) contrast(1.1) saturate(.8) brightness(1.05)'},
+  chaud:{n:'Chaud',css:'saturate(1.2) sepia(.15) brightness(1.04)'},
+  pop:{n:'Pop',css:'saturate(1.6) contrast(1.1)'}
+};
+let S = {mode:'strip',filter:'normal',theme:'mariage',title:'Léa & Tom',sub:'20 novembre 2026',delay:3,facing:'user',auto:true,ret:true};
+try{Object.assign(S, JSON.parse(localStorage.getItem('pb-set')||'{}'))}catch(e){}
+const persist = () => {try{localStorage.setItem('pb-set',JSON.stringify(S))}catch(e){}};
+let live = false, busy = false, shots = [], gallery = [], current = null, stream = null, retTimer = null;
+
+/* ---------- natif (Android) ---------- */
+const Cap = window.Capacitor;
+const native = !!(Cap && Cap.isNativePlatform && Cap.isNativePlatform());
+const Media = native ? Cap.registerPlugin('Media') : null;
+const FS = native ? Cap.registerPlugin('Filesystem') : null;
+const Share = native ? Cap.registerPlugin('Share') : null;
+let albumId = null;
+const toDataURL = blob => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsDataURL(blob); });
+async function album(){
+  if (albumId) return albumId;
+  const find = async () => {
+    const [{albums}, {path}] = await Promise.all([Media.getAlbums(), Media.getAlbumsPath()]);
+    const a = albums.find(a => a.name === 'Photobooth' && a.identifier.startsWith(path));
+    return a ? a.identifier : null;
+  };
+  albumId = await find();
+  if (!albumId){ await Media.createAlbum({name:'Photobooth'}); albumId = await find(); }
+  return albumId;
+}
+async function saveToGallery(item){
+  if (item.saved) return;
+  await Media.savePhoto({path: await toDataURL(item.blob), albumIdentifier: await album(), fileName: fname(item).replace(/\.jpg$/, '')});
+  item.saved = true;
+}
+
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const need = () => S.mode === 'strip' ? 4 : 1;
+
+function renderUI(){
+  $('evLabel').textContent = S.title + (S.sub ? ' · ' + S.sub : '');
+  document.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === S.mode));
+  $('filters').innerHTML = Object.entries(FILTERS).map(([k,f]) =>
+    `<button class="chip" data-f="${k}" aria-pressed="${k===S.filter}">${f.n}</button>`).join('');
+  $('vid').style.filter = FILTERS[S.filter].css;
+  $('mirror').classList.toggle('back', S.facing === 'environment');
+  $('file').setAttribute('capture', S.facing);
+  renderDots();
+}
+function renderDots(){
+  $('dots').innerHTML = S.mode === 'strip' ? Array.from({length:4},(_,i)=>`<b class="${i<shots.length?'done':''}"></b>`).join('') : '';
+}
+function setPh(title, text){ $('phTitle').textContent = title; $('phText').textContent = text; }
+
+async function startCam(){
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  try{
+    if (!navigator.mediaDevices?.getUserMedia) throw 0;
+    stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:S.facing,width:{ideal:1920},height:{ideal:1440}},audio:false});
+    $('vid').srcObject = stream; await $('vid').play().catch(()=>{});
+    live = true; $('ph').hidden = true;
+  }catch(e){
+    live = false; $('ph').hidden = false;
+    setPh('Souriez !', "Appuie sur GO : l'appareil photo du téléphone s'ouvre. " + (S.mode==='strip' ? '4 photos pour une bande.' : ''));
+  }
+}
+
+/* ---------- capture ---------- */
+function grab(src, sw, sh, mirror){
+  const c = document.createElement('canvas'); c.width = 1200; c.height = 900;
+  const x = c.getContext('2d');
+  let cw = sw, ch = sh;
+  if (sw/sh > 4/3) cw = sh*4/3; else ch = sw*3/4;
+  if (mirror){ x.translate(1200,0); x.scale(-1,1); }
+  x.drawImage(src, (sw-cw)/2, (sh-ch)/2, cw, ch, 0, 0, 1200, 900);
+  applyFilter(x, S.filter);
+  return c;
+}
+function applyFilter(x, f){
+  if (f === 'normal') return;
+  const im = x.getImageData(0,0,1200,900), d = im.data;
+  const cl = v => v < 0 ? 0 : v > 255 ? 255 : v;
+  for (let i = 0; i < d.length; i += 4){
+    let r = d[i], g = d[i+1], b = d[i+2];
+    const l = .299*r + .587*g + .114*b;
+    const sat = s => { r = l+(r-l)*s; g = l+(g-l)*s; b = l+(b-l)*s; };
+    const con = k => { r = (r-128)*k+128; g = (g-128)*k+128; b = (b-128)*k+128; };
+    const sep = a => { const sr=.393*r+.769*g+.189*b, sg=.349*r+.686*g+.168*b, sb=.272*r+.534*g+.131*b;
+      r = r+(sr-r)*a; g = g+(sg-g)*a; b = b+(sb-b)*a; };
+    if (f === 'noir'){ r = g = b = l; con(1.1); }
+    else if (f === 'sepia') sep(.9);
+    else if (f === 'vintage'){ sep(.4); con(1.1); sat(.8); r+=12; g+=12; b+=12; }
+    else if (f === 'chaud'){ sat(1.2); sep(.15); r*=1.04; g*=1.04; b*=1.04; }
+    else if (f === 'pop'){ sat(1.6); con(1.1); }
+    d[i] = cl(r); d[i+1] = cl(g); d[i+2] = cl(b);
+  }
+  x.putImageData(im, 0, 0);
+}
+
+async function countdown(n){
+  const el = $('count');
+  for (let i = n; i > 0; i--){
+    el.textContent = i; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+    await wait(1000);
+  }
+  el.textContent = ''; el.classList.remove('pop');
+}
+function flash(){ const f = $('flash'); f.classList.remove('on'); void f.offsetWidth; f.classList.add('on'); }
+
+async function shoot(){
+  if (busy) return;
+  if (!live){ $('file').click(); return; }
+  busy = true; $('shoot').disabled = true; shots = []; renderDots();
+  const v = $('vid');
+  for (let i = 0; i < need(); i++){
+    await countdown(i === 0 ? S.delay : 3);
+    flash();
+    shots.push(grab(v, v.videoWidth, v.videoHeight, S.facing === 'user'));
+    renderDots();
+    await wait(600);
+  }
+  await finish();
+  busy = false; $('shoot').disabled = false;
+}
+
+$('file').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  try{
+    const img = await loadImg(f);
+    flash();
+    shots.push(grab(img, img.naturalWidth, img.naturalHeight, false));
+    renderDots();
+    if (shots.length < need()){
+      setPh(`Photo ${shots.length + 1} sur ${need()}`, 'Changez de pose, puis appuyez encore sur GO.');
+    } else {
+      await finish();
+      setPh('Souriez !', "Appuie sur GO pour la prochaine photo.");
+    }
+  }catch(err){ setPh('Oups', "La photo n'a pas pu être lue. Réessaie."); }
+});
+function loadImg(file){
+  return new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = URL.createObjectURL(file); });
+}
+
+/* ---------- composition ---------- */
+function fitText(x, txt, weight, size, family, maxW){
+  let s = size;
+  do { x.font = `${weight} ${s}px "${family}", sans-serif`; s -= 2; } while (x.measureText(txt).width > maxW && s > 14);
+}
+async function finish(){
+  const T = THEMES[S.theme];
+  try{ await document.fonts.load(`${T.w} 40px "${T.font}"`); }catch(e){}
+  const strip = shots.length === 4;
+  const P = strip ? 36 : 50, pw = strip ? 648 : 1200, ph = strip ? 486 : 900, gap = 18, foot = strip ? 210 : 240;
+  const W = pw + 2*P, H = P + shots.length*ph + (shots.length-1)*gap + foot;
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d');
+  x.fillStyle = T.bg; x.fillRect(0,0,W,H);
+  shots.forEach((s,i) => x.drawImage(s, P, P + i*(ph+gap), pw, ph));
+  const fy = H - foot;
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillStyle = T.acc;
+  for (let k = -2; k <= 2; k++){ x.beginPath(); x.arc(W/2 + k*22, fy + foot*.2, 4, 0, 7); x.fill(); }
+  x.fillStyle = T.ink;
+  fitText(x, S.title, T.w, strip ? 52 : 76, T.font, W - 2*P);
+  x.fillText(S.title, W/2, fy + foot*.48);
+  x.fillStyle = T.acc;
+  fitText(x, S.sub, '600', strip ? 24 : 34, 'Outfit', W - 2*P);
+  x.fillText(S.sub, W/2, fy + foot*.74);
+  const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', .92));
+  const item = {blob, url:URL.createObjectURL(blob), n:Date.now() % 1e7, saved:false};
+  gallery.unshift(item); shots = []; renderDots(); renderGal();
+  showResult(item);
+  if (native && S.auto){
+    try{ await saveToGallery(item); if (current === item) $('note').textContent = 'Enregistrée dans la galerie (album Photobooth).'; }
+    catch(e){ if (current === item) $('note').textContent = "Enregistrement automatique impossible : vérifie l'espace libre."; }
+  }
+  if (S.ret){
+    clearTimeout(retTimer);
+    retTimer = setTimeout(() => { if (current === item) $('result').hidden = true; }, 15000);
+  }
+}
+
+/* ---------- galerie & partage ---------- */
+function renderGal(){
+  $('nb').textContent = gallery.length ? `(${gallery.length})` : '';
+  $('gal').innerHTML = gallery.length
+    ? gallery.map((g,i) => `<button data-g="${i}" aria-label="Photo ${g.n}"><img src="${g.url}" alt=""></button>`).join('')
+    : '<div class="empty">Aucune photo pour l\'instant. La première est pour vous !</div>';
+}
+function showResult(item){
+  current = item; $('resImg').src = item.url;
+  $('note').textContent = item.saved ? 'Déjà enregistrée dans la galerie.' : '';
+  const file = new File([item.blob], fname(item), {type:'image/jpeg'});
+  $('share').hidden = !(native || (navigator.canShare && navigator.canShare({files:[file]})));
+  $('result').hidden = false;
+}
+const fname = it => `photobooth-${(S.title||'photo').toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}-${it.n}.jpg`;
+
+$('save').addEventListener('click', async () => {
+  if (!current) return;
+  clearTimeout(retTimer);
+  if (native){
+    try{ await saveToGallery(current); $('note').textContent = 'Enregistrée dans la galerie (album Photobooth).'; }
+    catch(e){ $('note').textContent = "Impossible d'enregistrer : vérifie l'espace libre."; }
+    return;
+  }
+  const a = document.createElement('a'); a.href = current.url; a.download = fname(current);
+  document.body.appendChild(a); a.click(); a.remove();
+  $('note').textContent = 'Si rien ne se passe : appui long sur la photo puis « Enregistrer l\'image ».';
+});
+$('share').addEventListener('click', async () => {
+  clearTimeout(retTimer);
+  if (native){
+    try{
+      const b64 = (await toDataURL(current.blob)).split(',')[1];
+      const {uri} = await FS.writeFile({path:fname(current), data:b64, directory:'CACHE'});
+      await Share.share({title:S.title, files:[uri], dialogTitle:'Partager la photo'});
+    }catch(e){ if (!/cancel/i.test(e && e.message || '')) $('note').textContent = 'Partage impossible.'; }
+    return;
+  }
+  try{ await navigator.share({files:[new File([current.blob], fname(current), {type:'image/jpeg'})], title:S.title}); }
+  catch(e){ if (e.name !== 'AbortError') $('note').textContent = 'Partage indisponible sur cet appareil.'; }
+});
+$('again').addEventListener('click', () => { clearTimeout(retTimer); $('result').hidden = true; });
+$('gal').addEventListener('click', e => { const b = e.target.closest('[data-g]'); if (b){ clearTimeout(retTimer); showResult(gallery[+b.dataset.g]); } });
+
+/* ---------- contrôles ---------- */
+$('shoot').addEventListener('click', shoot);
+document.querySelector('.seg').addEventListener('click', e => {
+  const b = e.target.closest('[data-mode]'); if (!b || busy) return;
+  S.mode = b.dataset.mode; shots = []; persist(); renderUI();
+  if (!live) setPh('Souriez !', S.mode === 'strip' ? 'Appuie sur GO : 4 photos pour une bande.' : 'Appuie sur GO pour prendre la photo.');
+});
+$('filters').addEventListener('click', e => {
+  const b = e.target.closest('[data-f]'); if (!b) return;
+  S.filter = b.dataset.f; persist(); renderUI();
+});
+
+function renderThemes(){
+  $('themes').innerHTML = Object.entries(THEMES).map(([k,t]) =>
+    `<button type="button" data-t="${k}" aria-pressed="${k===S.theme}" style="background:${t.bg};color:${t.ink};font-family:'${t.font}'">${t.name}</button>`).join('');
+}
+$('openSet').addEventListener('click', () => {
+  $('tTitle').value = S.title; $('tSub').value = S.sub; $('tDelay').value = S.delay; $('tFacing').value = S.facing;
+  $('tAuto').checked = S.auto; $('tReturn').checked = S.ret; $('tAuto').closest('label').hidden = !native;
+  renderThemes(); $('settings').hidden = false;
+});
+$('themes').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (b){ S.theme = b.dataset.t; renderThemes(); } });
+$('closeSet').addEventListener('click', () => { $('settings').hidden = true; });
+$('setForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const facing = $('tFacing').value, changed = facing !== S.facing;
+  Object.assign(S, {title:$('tTitle').value.trim() || 'Photobooth', sub:$('tSub').value.trim(), delay:+$('tDelay').value, facing, auto:$('tAuto').checked, ret:$('tReturn').checked});
+  persist(); renderUI(); $('settings').hidden = true;
+  if (changed) startCam();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape'){ $('result').hidden = true; $('settings').hidden = true; }
+  if ((e.key === ' ' || e.key === 'Enter') && $('result').hidden && $('settings').hidden && document.activeElement === document.body){ e.preventDefault(); shoot(); }
+});
+
+renderUI(); renderGal(); startCam();
+if (native) $('galNote').textContent = "Touchez une photo pour l'enregistrer ou la partager. Les photos enregistrées sont dans l'album Photobooth de la galerie.";
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden){ if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; live = false; }
+  else startCam();
+});
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "appId": "fr.julien.photobooth",
+  "appName": "Photobooth",
+  "webDir": "www",
+  "backgroundColor": "#141114",
+  "android": {
+    "backgroundColor": "#141114"
+  }
+}

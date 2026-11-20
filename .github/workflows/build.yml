@@ -1,0 +1,74 @@
+name: Construire l'appli Android
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Copier l'appli dans le projet Android
+        run: |
+          cp node_modules/@capacitor/core/dist/capacitor.js www/
+          npx cap sync android
+
+      - name: APK de test (à installer directement sur le téléphone)
+        working-directory: android
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Préparer la clé de signature
+        id: key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Pas de clé KEYSTORE_BASE64 : seul l'APK de test est construit."
+          fi
+
+      - name: Fichier .aab signé pour le Play Store
+        if: steps.key.outputs.ok == 'true'
+        working-directory: android
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          PB_KEYSTORE: ${{ runner.temp }}/upload.jks
+          PB_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          PB_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          PB_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew bundleRelease --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: photobooth-apk-test
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - uses: actions/upload-artifact@v4
+        if: steps.key.outputs.ok == 'true'
+        with:
+          name: photobooth-playstore-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
